@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Personal File Vault</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #111; 
+      color: #0f0; 
+      text-align: center; 
+      padding: 20px; 
+    }
+    button, input { 
+      padding: 12px; 
+      margin: 10px; 
+      font-size: 16px; 
+      border-radius: 8px; 
+    }
+    .file-item { 
+      background: #222; 
+      padding: 12px; 
+      margin: 10px auto; 
+      max-width: 700px; 
+      border-radius: 8px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
+    .login-btn { background: #4285f4; color: white; border: none; }
+  </style>
+</head>
+<body>
+  <h1>🚀 My Personal File Vault</h1>
+
+  <button class="login-btn" onclick="googleLogin()">Google se Login karo</button>
+  <button onclick="logout()">Logout</button>
+
+  <br><br>
+  <input type="file" id="fileInput" multiple>
+  <button onclick="uploadFiles()">Upload Files</button>
+
+  <div id="fileList" style="margin-top: 40px; text-align: left; max-width: 700px; margin: 40px auto;"></div>
+
+  <script>
+    const supabaseUrl = 'https://movdapgqarxjyytdcb.supabase.co';
+    const supabaseAnonKey = 'sb_publishable_RfoE7wRsU54YvyKA83LfKg_zPLHI...'; // ← yahan apni poori key daal dena
+
+    const supabase = Supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    let currentUser = null;
+
+    async function googleLogin() {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href }
+      });
+      if (error) alert("Login error: " + error.message);
+    }
+
+    async function logout() {
+      await supabase.auth.signOut();
+      currentUser = null;
+      document.getElementById('fileList').innerHTML = '';
+      alert('Logout ho gaya');
+    }
+
+    async function uploadFiles() {
+      if (!currentUser) return alert("Pehle Google se login karo!");
+
+      const files = document.getElementById('fileInput').files;
+      if (files.length === 0) return alert("Koi file select nahi ki!");
+
+      for (let file of files) {
+        const filePath = `${currentUser.id}/${file.name}`;
+
+        const { error } = await supabase.storage
+          .from('user-files')
+          .upload(filePath, file, { upsert: true });
+
+        if (error) console.error("Upload error:", error);
+      }
+
+      alert("Files upload ho gayi!");
+      loadFiles();
+    }
+
+    async function loadFiles() {
+      if (!currentUser) return;
+
+      const fileListDiv = document.getElementById('fileList');
+      fileListDiv.innerHTML = '<h2>Ter i Files:</h2>';
+
+      const { data, error } = await supabase.storage
+        .from('user-files')
+        .list(currentUser.id);
+
+      if (error) return console.error(error);
+
+      for (let file of data) {
+        const { data: urlData } = supabase.storage
+          .from('user-files')
+          .getPublicUrl(`${currentUser.id}/${file.name}`);
+
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.innerHTML = `
+          <span>${file.name}</span>
+          <a href="${urlData.publicUrl}" target="_blank" download>📥 Download</a>
+        `;
+        fileListDiv.appendChild(div);
+      }
+    }
+
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        currentUser = session.user;
+        loadFiles();
+      }
+    });
+  </script>
+</body>
+</html>
